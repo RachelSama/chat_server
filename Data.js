@@ -26,7 +26,7 @@ class Data {
     const roomsTableQuery = `CREATE TABLE IF NOT EXISTS room (
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(250) NOT NULL,
-      token VARCHAR(250),
+      uuid VARCHAR(250),
       users TEXT,
       messages TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -36,7 +36,8 @@ class Data {
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(250) NOT NULL,
       password VARCHAR(250) NOT NULL,
-      token VARCHAR(250)
+      uuid VARCHAR(250),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
 
     this.connection.query(roomsTableQuery, (err) => {
@@ -57,7 +58,7 @@ class Data {
   }
 
   insertRoom(name, token, users, messages) {
-    const insertQuery = `INSERT INTO room (name, token, users, messages) VALUES (?, ?, ?, ?)`;
+    const insertQuery = `INSERT INTO room (name, uuid, users, messages) VALUES (?, ?, ?, ?)`;
     const values = [name, token, JSON.stringify(users), JSON.stringify(messages)];
 
     this.connection.query(insertQuery, values, (err, result) => {
@@ -113,15 +114,15 @@ class Data {
   }
 
   getTokenIfUserExist(username, password, callback) {
-    const selectQuery = "SELECT token FROM user WHERE username = ? AND password = ?";
+    const selectQuery = "SELECT uuid FROM user WHERE username = ? AND password = ?";
 
     this.connection.query(selectQuery, [username, password], (err, results) => {
       if (err) {
         console.error("Error al obtener el token del usuario:", err);
         callback();
       } else {
-        if (results.length > 0 && results[0].token) {
-          callback(results[0].token);
+        if (results.length > 0 && results[0].uuid) {
+          callback(results[0].uuid);
         } else {
           callback();
         }
@@ -130,7 +131,7 @@ class Data {
   }
 
   saveUserToDatabase(username, password, token) {
-    const insertQuery = `INSERT INTO user (username, password, token) VALUES (?, ?, ?)`;
+    const insertQuery = `INSERT INTO user (username, password, uuid) VALUES (?, ?, ?)`;
     const values = [username, password, token];
 
     this.connection.query(insertQuery, values, (err, result) => {
@@ -158,7 +159,7 @@ class Data {
   }
 
   getRoomNameByToken(token, callback) {
-    const selectQuery = "SELECT name FROM room WHERE token = ?";
+    const selectQuery = "SELECT name FROM room WHERE uuid = ?";
   
     this.connection.query(selectQuery, [token], (err, results) => {
       if (err) {
@@ -172,7 +173,7 @@ class Data {
   }
 
   getUserDataByToken(token, callback) {
-    const selectQuery = "SELECT username, password FROM user WHERE token = ?";
+    const selectQuery = "SELECT username, password FROM user WHERE uuid = ?";
 
     this.connection.query(selectQuery, [token], (err, results) => {
       if (err) {
