@@ -18,36 +18,36 @@ app.use(cors())
 
 const dataMysql = new Data();
 
-const generateUniqueToken = () => {
-  const uniqueToken = uuidv4();
-  return uniqueToken;
+const generateUniqueUuid = () => {
+  const uniqueUuid = uuidv4();
+  return uniqueUuid; 
 };
 
 io.on('connection', (socket) => {
-  let token = socket.handshake.auth.token
+  let uuid = socket.handshake.auth.uuid
   let userId = socket.id;
 
   console.log(`⚡: ${userId} user just connected!`)
-  console.log((token) ? "Con token: " + token : "Sin token");
+  console.log((uuid) ? "Con uuid: " + uuid : "Sin uuid");
 
   socket.on('login', (data) => {
     console.log(data)
     const { username, password } = data;
 
-    dataMysql.getTokenIfUserExist(username, password, (tokenUser) => {
-      if (tokenUser) {
+    dataMysql.getUuidIfUserExist(username, password, (uuidUser) => {
+      if (uuidUser) {
         console.log("existe el usuario")
-        token = tokenUser;
+        uuid = uuidUser;
       } else {
         console.log("no existe el usuario")
-        const uniqueToken = generateUniqueToken();
-        token = uniqueToken;
-        dataMysql.saveUserToDatabase(username, password, uniqueToken);
+        const uniqueUuid = generateUniqueUuid();
+        uuid = uniqueUuid;
+        dataMysql.saveUserToDatabase(username, password, uniqueUuid);
       }
-      console.log("token guardado: " + token)
-      socket.emit("localStorageToken", token)
+      console.log("uuid guardado: " + uuid)
+      socket.emit("localStorageUuid", uuid)
 
-      dataMysql.getRoomNameByToken(token, (roomName) => {
+      dataMysql.getRoomNameByUuid(uuid, (roomName) => {
         if (roomName !== "") {
           console.log("existe la room")
           socket.join(roomName);
@@ -61,14 +61,14 @@ io.on('connection', (socket) => {
 
           io.emit('newRoom', nameRoom)
 
-          dataMysql.insertRoom(nameRoom, token, [username], [])
+          dataMysql.insertRoom(nameRoom, uuid, [username])
         }
       });
     });
   });
 
-  socket.on('getUserData', (storedToken, callback) => {
-    dataMysql.getUserDataByToken(storedToken, (userData) => {
+  socket.on('getUserData', (storedUuid, callback) => {
+    dataMysql.getUserDataByUuid(storedUuid, (userData) => {
       if (userData) {
         const { username, password } = userData;
         callback({ username, password });
@@ -80,34 +80,34 @@ io.on('connection', (socket) => {
 
   socket.on('broadcastMessage', (data) => {
 
-    if (data.token === "1234") {
+    if (data.uuid === "1234") {
 
       dataMysql.getAllRoomNames((roomNames) => {
         roomNames.forEach((room) => {
 
           io.to(room).emit("messageResponse", data)
 
-          const user = data.name
-          const now = new Date();
-          const message = { user: user, text: data.text, timestamp: now };
+          const user = data.name;
+          const text = data.text;
 
-          dataMysql.insertMessage(room, message)
+          dataMysql.insertMessage(user, text, room)
         });
       })
     }
   });
 
-  if (token !== "1234") {
+  if (uuid !== "1234") {
 
     socket.on("message", data => {
       console.log(data)
       io.to(data.room).emit("messageResponse", data)
 
-      const user = data.name
-      const now = new Date();
-      const message = { user: user, text: data.text, timestamp: now };
-
-      dataMysql.insertMessage(data.room, message)
+      const user = data.name;
+      const text = data.text;
+      const room = data.room
+      if(room) {
+        dataMysql.insertMessage(user, text, room)
+      }
     })
 
   } else {
@@ -119,11 +119,13 @@ io.on('connection', (socket) => {
       console.log(data)
       io.to(data.room).emit("messageResponse", data)
 
-      const user = "Unobike"
-      const now = new Date();
-      const message = { user: user, text: data.text, timestamp: now };
+      const user = data.name;
+      const text = data.text;
+      const room = data.room
 
-      dataMysql.insertMessage(data.room, message)
+      if(room) {
+        dataMysql.insertMessage(user, text, room)
+      }
     })
   }
 
@@ -140,9 +142,6 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('🔥: A user disconnected');
-    dataMysql.getAllRoomNames((roomNames) => {
-      io.to(userId).emit("roomListResponse", roomNames)
-    })
   });
 
   socket.on('getRoomData', async (nameRoom) => {
