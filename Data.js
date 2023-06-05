@@ -23,16 +23,23 @@ class Data {
   }
 
   createTables() {
-    const roomsTableQuery = `CREATE TABLE IF NOT EXISTS room (
+    const roomTableQuery = `CREATE TABLE IF NOT EXISTS room (
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(250) NOT NULL,
       uuid VARCHAR(250),
       users TEXT,
-      messages TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
 
-    const usersTableQuery = `CREATE TABLE IF NOT EXISTS user (
+    this.connection.query(roomTableQuery, (err) => {
+      if (err) {
+        console.error("Error al crear la tabla 'room':", err);
+      } else {
+        console.log("Tabla 'room' creada exitosamente");
+      }
+    });
+
+    const userTableQuery = `CREATE TABLE IF NOT EXISTS user (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(250) NOT NULL,
       password VARCHAR(250) NOT NULL,
@@ -40,26 +47,34 @@ class Data {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`;
 
-    this.connection.query(roomsTableQuery, (err) => {
-      if (err) {
-        console.error("Error al crear la tabla 'rooms':", err);
-      } else {
-        console.log("Tabla 'rooms' creada exitosamente");
-      }
-    });
-
-    this.connection.query(usersTableQuery, (err) => {
+    this.connection.query(userTableQuery, (err) => {
       if (err) {
         console.error("Error al crear la tabla 'user':", err);
       } else {
         console.log("Tabla 'user' creada exitosamente");
       }
     });
+
+    const messageTableQuery = `CREATE TABLE IF NOT EXISTS message (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user VARCHAR(250) NOT NULL,
+      text TEXT NOT NULL,
+      roomName VARCHAR(250),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`;
+
+    this.connection.query(messageTableQuery, (err) => {
+      if (err) {
+        console.error("Error al crear la tabla 'message':", err);
+      } else {
+        console.log("Tabla 'message' creada exitosamente");
+      }
+    });
   }
 
-  insertRoom(name, token, users, messages) {
-    const insertQuery = `INSERT INTO room (name, uuid, users, messages) VALUES (?, ?, ?, ?)`;
-    const values = [name, token, JSON.stringify(users), JSON.stringify(messages)];
+  insertRoom(name, uuid, users) {
+    const insertQuery = `INSERT INTO room (name, uuid, users) VALUES (?, ?, ?)`;
+    const values = [name, uuid, JSON.stringify(users)];
 
     this.connection.query(insertQuery, values, (err, result) => {
       if (err) {
@@ -71,16 +86,16 @@ class Data {
     });
   }
 
-  insertMessage(roomName, message) {
-    const insertQuery = `UPDATE room SET messages = JSON_ARRAY_APPEND(messages, '$', ?) WHERE name = ?`;
-    const value = JSON.stringify(message);
+  insertMessage(user, text, roomName) {
+    const insertQuery = `INSERT INTO message (user, text, roomName) VALUES (?, ?, ?)`;
+    const values = [user, text, roomName];
 
-    this.connection.query(insertQuery, [value, roomName], (err, result) => {
+    this.connection.query(insertQuery, values, (err, result) => {
       if (err) {
         console.error("Error al insertar un nuevo mensaje:", err);
       } else {
-        console.log("Nuevo mensaje insertado exitosamente en la sala:", roomName);
-        console.log("Número de filas afectadas:", result.affectedRows);
+        console.log("Nuevo mensaje insertado exitosamente");
+        console.log("ID del mensaje:", result.insertId);
       }
     });
   }
@@ -100,25 +115,29 @@ class Data {
   }
 
   getRoomMessages(roomName, callback) {
-    const selectQuery = "SELECT messages FROM room WHERE name = ?";
+    const selectQuery = "SELECT user, text, created_at FROM message WHERE roomName = ?";
 
     this.connection.query(selectQuery, [roomName], (err, results) => {
       if (err) {
         console.error("Error al obtener los mensajes de la sala:", err);
         callback([]);
       } else {
-        const messages = results[0] ? JSON.parse(results[0].messages) : [];
+        const messages = results.map((row) => ({
+          user: row.user,
+          text: row.text,
+          timestamp: row.created_at,
+        }))
         callback(messages);
       }
     });
   }
 
-  getTokenIfUserExist(username, password, callback) {
+  getUuidIfUserExist(username, password, callback) {
     const selectQuery = "SELECT uuid FROM user WHERE username = ? AND password = ?";
 
     this.connection.query(selectQuery, [username, password], (err, results) => {
       if (err) {
-        console.error("Error al obtener el token del usuario:", err);
+        console.error("Error al obtener el uuid del usuario:", err);
         callback();
       } else {
         if (results.length > 0 && results[0].uuid) {
@@ -130,9 +149,9 @@ class Data {
     });
   }
 
-  saveUserToDatabase(username, password, token) {
+  saveUserToDatabase(username, password, uuid) {
     const insertQuery = `INSERT INTO user (username, password, uuid) VALUES (?, ?, ?)`;
-    const values = [username, password, token];
+    const values = [username, password, uuid];
 
     this.connection.query(insertQuery, values, (err, result) => {
       if (err) {
@@ -158,10 +177,10 @@ class Data {
     });
   }
 
-  getRoomNameByToken(token, callback) {
+  getRoomNameByUuid(uuid, callback) {
     const selectQuery = "SELECT name FROM room WHERE uuid = ?";
-  
-    this.connection.query(selectQuery, [token], (err, results) => {
+
+    this.connection.query(selectQuery, [uuid], (err, results) => {
       if (err) {
         console.error("Error al obtener el nombre de la sala:", err);
         callback();
@@ -172,12 +191,12 @@ class Data {
     });
   }
 
-  getUserDataByToken(token, callback) {
+  getUserDataByUuid(uuid, callback) {
     const selectQuery = "SELECT username, password FROM user WHERE uuid = ?";
 
-    this.connection.query(selectQuery, [token], (err, results) => {
+    this.connection.query(selectQuery, [uuid], (err, results) => {
       if (err) {
-        console.error("Error al obtener los datos del usuario por token:", err);
+        console.error("Error al obtener los datos del usuario por uuid:", err);
         callback(null);
       } else {
         if (results.length > 0) {
